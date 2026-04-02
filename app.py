@@ -1,50 +1,40 @@
 import streamlit as st
-import heapq
+import osmnx as ox
+import networkx as nx
+from geopy.geocoders import Nominatim
 
-# Graph (real cities)
-graph = {
-    'Vijayawada': [('Guntur', 35), ('Hyderabad', 275)],
-    'Guntur': [('Hyderabad', 270), ('Bangalore', 600)],
-    'Hyderabad': [('Bangalore', 570), ('Chennai', 630)],
-    'Bangalore': [('Chennai', 350)],
-    'Chennai': []
-}
+st.title("🌍 Real Route Planner")
 
-def dijkstra(graph, start):
-    distances = {node: float('inf') for node in graph}
-    previous = {node: None for node in graph}
+# User input
+start_place = st.text_input("Enter Start Location")
+end_place = st.text_input("Enter Destination")
 
-    distances[start] = 0
-    pq = [(0, start)]
+if st.button("Find Route"):
+    geolocator = Nominatim(user_agent="route_app")
 
-    while pq:
-        current_distance, current_node = heapq.heappop(pq)
+    try:
+        # Convert to coordinates
+        start_location = geolocator.geocode(start_place)
+        end_location = geolocator.geocode(end_place)
 
-        for neighbor, weight in graph[current_node]:
-            new_distance = current_distance + weight
+        start_coords = (start_location.latitude, start_location.longitude)
+        end_coords = (end_location.latitude, end_location.longitude)
 
-            if new_distance < distances[neighbor]:
-                distances[neighbor] = new_distance
-                previous[neighbor] = current_node
-                heapq.heappush(pq, (new_distance, neighbor))
+        # Load map graph
+        G = ox.graph_from_place(start_place, network_type='drive')
 
-    return distances, previous
+        # Get nearest nodes
+        start_node = ox.distance.nearest_nodes(G, start_coords[1], start_coords[0])
+        end_node = ox.distance.nearest_nodes(G, end_coords[1], end_coords[0])
 
-def get_path(previous, target):
-    path = []
-    while target:
-        path.append(target)
-        target = previous[target]
-    return path[::-1]
+        # Shortest path
+        route = nx.shortest_path(G, start_node, end_node, weight='length')
 
-# UI
-st.title("🚗 Route Planner")
+        st.success("Route Found!")
 
-start = st.selectbox("Select Start City", list(graph.keys()))
-end = st.selectbox("Select Destination City", list(graph.keys()))
+        # Plot map
+        fig, ax = ox.plot_graph_route(G, route, node_size=0)
+        st.pyplot(fig)
 
-if st.button("Find Shortest Path"):
-    distances, previous = dijkstra(graph, start)
-
-    st.write("### Shortest Distance:", distances[end], "km")
-    st.write("### Path:", " → ".join(get_path(previous, end)))
+    except Exception as e:
+        st.error("Error: " + str(e))

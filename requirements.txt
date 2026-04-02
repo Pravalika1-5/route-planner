@@ -4,3 +4,5 @@ geopy
 networkx
 matplotlib
 scikit-learn
+folium
+streamlit-folium
